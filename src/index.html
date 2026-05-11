@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>算法可视化演示系统</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <h1>数据结构与算法可视化演示系统</h1>
+      <p>必做算法：堆的创建过程｜扩展算法：快速排序</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel control-panel">
+        <h2>输入与控制</h2>
+
+        <div class="row">
+          <label for="algorithmSelect">算法类型</label>
+          <select id="algorithmSelect">
+            <option value="heap_build">堆创建（必做）</option>
+            <option value="quick_sort">快速排序（扩展）</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>运行模式</label>
+          <div class="mode-box">
+            <label class="mode-item">
+              <input type="radio" name="runMode" value="mock" checked />
+              本地演示（无后端）
+            </label>
+            <label class="mode-item">
+              <input type="radio" name="runMode" value="server" />
+              联调模式（HTTP + WebSocket）
+            </label>
+          </div>
+          <small id="modeHint"></small>
+        </div>
+
+        <div class="row">
+          <label for="numberInput">整数输入</label>
+          <textarea
+            id="numberInput"
+            rows="4"
+            placeholder="请输入整数，逗号分隔，例如：7,2,9,1,5,8,3,6,4"
+          ></textarea>
+          <small id="inputHint"></small>
+        </div>
+
+        <div class="row speed-row">
+          <label for="speedSelect">演示速度</label>
+          <select id="speedSelect">
+            <option value="slow">慢速</option>
+            <option value="normal" selected>中速</option>
+            <option value="fast">快速</option>
+          </select>
+        </div>
+
+        <div class="btn-group">
+          <button id="submitBtn" class="btn btn-primary">提交并开始</button>
+          <button id="pauseBtn" class="btn" disabled>暂停</button>
+          <button id="resumeBtn" class="btn" disabled>继续</button>
+          <button id="stepBtn" class="btn" disabled>下一步</button>
+          <button id="resetBtn" class="btn btn-danger">重置</button>
+        </div>
+
+        <div class="status-grid">
+          <div><strong>连接状态：</strong><span id="wsStatus">本地模式（未连接）</span></div>
+          <div><strong>演示状态：</strong><span id="playStatus">待开始</span></div>
+        </div>
+
+        <div id="toast" class="toast hidden"></div>
+      </section>
+
+      <section class="panel explain-panel">
+        <h2>步骤说明</h2>
+        <div id="stepMeta" class="step-meta">
+          <span>步骤：-</span>
+          <span>算法：-</span>
+        </div>
+        <pre id="stepDescription" class="step-text">等待步骤数据...</pre>
+      </section>
+
+      <section class="panel visual-panel">
+        <h2>可视化渲染区域</h2>
+        <div class="canvas-wrap">
+          <svg id="vizCanvas" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div class="legend">
+          <span><i class="dot normal"></i>普通节点</span>
+          <span><i class="dot active"></i>当前操作节点</span>
+          <span><i class="dot compare"></i>比较节点</span>
+          <span><i class="dot done"></i>已完成区域</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <small>前端模块：index.html / style.css / socket.js / mockRunner.js / visualizer.js / main.js</small>
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
