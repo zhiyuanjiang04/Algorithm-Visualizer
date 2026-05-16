@@ -53,6 +53,7 @@ Key principles:
 - Optional algorithm: quick sort visualization.
 - Local mode and integration mode.
 - Session isolation using `sessionId`.
+- Run isolation using `runId` (prevents mixed streams when submitting repeatedly).
 
 ## 5. Implementation
 
@@ -109,6 +110,18 @@ Fix:
 
 - read body until `Content-Length` is fully satisfied, then parse JSON.
 
+### Issue E: repeated submissions got mixed into one stream
+
+Root cause:
+
+- old run thread and new run thread shared one session push channel; no latest-run ownership check.
+
+Fix:
+
+- add mandatory `runId` for both `POST /api/visualize` and WS `start`.
+- backend stores `current_run_id` per session and only accepts/streams the latest run.
+- frontend drops WS messages whose `runId` does not match current page run.
+
 ## 7. Final Runbook
 
 ```bash
@@ -124,8 +137,14 @@ Quick verification:
 curl -s http://127.0.0.1:8080/api/health
 curl -s -X POST http://127.0.0.1:8080/api/visualize \
   -H 'Content-Type: application/json' \
-  -d '{"sessionId":"demo-1","algorithm":"heap_build","input":[7,2,9,1,5,8,3,6,4]}' 
+  -d '{"sessionId":"demo-1","runId":"run-001","algorithm":"heap_build","input":[7,2,9,1,5,8,3,6,4]}' 
 ```
+
+Repeated-submit isolation check:
+
+1. Submit one run with `runId=run-001`, then immediately submit another run with `runId=run-002`.
+2. Expected behavior: only `run-002` keeps streaming steps; stale `run-001` stops on backend checks.
+3. If a stale WS `start` is sent manually, backend returns: `stale run: 不是当前最新任务`.
 
 ## 8. Conclusion
 

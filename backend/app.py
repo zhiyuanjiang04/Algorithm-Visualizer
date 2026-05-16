@@ -21,6 +21,7 @@ class SessionState:
         self.session_id = session_id
         self.algorithm = "heap_build"
         self.input_data = []
+        self.current_run_id = ""
         self.speed = "normal"
         self.paused = False
         self.step_mode = False
@@ -354,6 +355,21 @@ class WebSocketHandler:
         elif mtype == "ping":
             self.send_json({"type": "pong"})
         elif mtype == "start":
+            run_id = str(msg.get("runId", "")).strip()
+            if not run_id:
+                self.send_json({"type": "error", "message": "缺少 runId"})
+                return
+
+            # 只允许启动当前最新任务，旧任务直接拒绝
+            if not state.current_run_id or run_id != state.current_run_id:
+                self.send_json({
+                    "type": "error",
+                    "sessionId": state.session_id,
+                    "runId": run_id,
+                    "message": "stale run: 不是当前最新任务"
+                })
+                return
+
             state.speed = str(msg.get("speed", "normal"))
             state.algorithm = str(msg.get("algorithm", state.algorithm))
             state.input_data = msg.get("input", state.input_data)
@@ -365,7 +381,7 @@ class WebSocketHandler:
             if not state.input_data:
                 # 尝试从之前的消息中获取，或者使用默认值
                 pass
-            threading.Thread(target=self._run_steps, args=(state, self), daemon=True).start()
+            threading.Thread(target=self._run_steps, args=(state, self, run_id), daemon=True).start()
         elif mtype == "pause":
             state.paused = True
             state.resume_event.clear()
@@ -382,25 +398,48 @@ class WebSocketHandler:
             state.step_mode = False
             state.resume_event.set()
             state.step_event.clear()
-            self.send_json({"type": "done", "message": "已重置"})
-    
-    def _run_steps(self, state, ws):
+            self.send_json({"type": "done", "sessionId": state.session_id, "runId": state.current_run_id, "message": "已重置"})
+
+    def _run_steps(self, state, ws, run_id):
         steps = build_steps(state.algorithm, state.input_data)
         delay = SPEED_MAP.get(state.speed, SPEED_MAP["normal"])
         
         for step in steps:
+            # 如果当前线程对应的 runId 已过期，则立刻终止推送
+            if run_id != state.current_run_id:
+                return
+
             while state.paused:
-                state.resume_event.wait()
+                if run_id != state.current_run_id:
+                    return
+                state.resume_event.wait(timeout=0.2)
                 state.resume_event.clear()
             
             if state.step_mode:
-                state.step_event.wait()
-                state.step_event.clear()
+                while True:
+                    if run_id != state.current_run_id:
+                        return
+                    if state.step_event.wait(timeout=0.2):
+                        state.step_event.clear()
+                        break
             
-            ws.send_json({"type": "step", "payload": step})
+            if run_id != state.current_run_id:
+                return
+            ws.send_json({
+                "type": "step",
+                "sessionId": state.session_id,
+                "runId": run_id,
+                "payload": step
+            })
             time.sleep(delay)
         
-        ws.send_json({"type": "done", "message": "演示完成"})
+        if run_id == state.current_run_id:
+            ws.send_json({
+                "type": "done",
+                "sessionId": state.session_id,
+                "runId": run_id,
+                "message": "演示完成"
+            })
 
 
 # ============ HTTP 请求处理 ============
@@ -534,11 +573,15 @@ class APIHandler:
             return
         
         session_id = str(payload.get("sessionId", "")).strip()
+        run_id = str(payload.get("runId", "")).strip()
         algorithm = str(payload.get("algorithm", "heap_build")).strip() or "heap_build"
         input_values = payload.get("input", [])
         
         if not session_id:
             self._send_json({"ok": False, "message": "缺少 sessionId"})
+            return
+        if not run_id:
+            self._send_json({"ok": False, "message": "缺少 runId"})
             return
         
         ok, arr, msg = parse_int_list(input_values)
@@ -553,12 +596,13 @@ class APIHandler:
         state = get_or_create_session(session_id)
         state.algorithm = algorithm
         state.input_data = arr
+        state.current_run_id = run_id
         state.paused = False
         state.step_mode = False
         state.resume_event.set()
         state.step_event.clear()
         
-        self._send_json({"ok": True, "message": "accepted"})
+        self._send_json({"ok": True, "message": "accepted", "sessionId": session_id, "runId": run_id})
 
 
 # ============ 服务器 ============

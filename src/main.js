@@ -6,6 +6,7 @@ const API_BASE = 'http://47.93.13.239:8080';
 
 const state = {
   sessionId: crypto.randomUUID(),
+  runId: '',
   get wsUrl() { return `ws://47.93.13.239:8080/ws`; },
   algorithm: 'heap_build',
   runMode: 'mock',
@@ -154,8 +155,10 @@ async function submitAndStart() {
   }
 
   if (state.runMode === 'mock') {
+    state.runId = crypto.randomUUID();
     localRunner.prepare({
       sessionId: state.sessionId,
+      runId: state.runId,
       algorithm: state.algorithm,
       input: parsed.arr,
     });
@@ -168,8 +171,12 @@ async function submitAndStart() {
     return;
   }
 
+  const runId = crypto.randomUUID();
+  state.runId = runId;
+
   const payload = {
     sessionId: state.sessionId,
+    runId,
     algorithm: state.algorithm,
     input: parsed.arr,
   };
@@ -189,6 +196,7 @@ async function submitAndStart() {
     const sent = socket.send({
       type: 'start',
       sessionId: state.sessionId,
+      runId,
       algorithm: state.algorithm,
       speed: el.speedSelect.value,
     });
@@ -300,6 +308,11 @@ const socket = new SocketClient(state.wsUrl, {
   },
   onMessage(msg) {
     if (state.runMode !== 'server') return;
+
+    // 忽略非当前运行任务的消息，避免多次提交时步骤混流
+    if (msg?.runId && state.runId && msg.runId !== state.runId) {
+      return;
+    }
 
     switch (msg.type) {
       case 'connected':
